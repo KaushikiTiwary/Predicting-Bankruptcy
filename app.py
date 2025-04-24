@@ -26,30 +26,28 @@ if uploaded_file:
         - *X5*: Sales / Total Assets
         """)
 
-    # Extract only the X1 to X5 columns
+    # Extract and scale features
     X = df[['X1', 'X2', 'X3', 'X4', 'X5']]
     X_scaled = scaler.transform(X)
 
-    # Predict
+    # Predict probabilities
     probs = model.predict_proba(X_scaled)[:, 1]
     df['lda_probability'] = probs
 
-    # Risk classification thresholds
-    q25, q50, q75 = 0.49, 0.50, 0.51
-
-    def classify(prob):
-        if prob < q25:
+    # Classification logic
+    def classify_zone(prob):
+        if prob < 0.49:
             return "🔴 Very High Risk"
-        elif prob < q50:
-            return "🟧 High Risk"
-        elif prob < q75:
-            return "🟨 Medium Risk"
+        elif prob < 0.50:
+            return "🟠 High Risk"
+        elif prob <= 0.50:
+            return "🟡 Medium Risk"
         else:
-            return "🟩 Very Low Risk"
+            return "🟢 Very Low Risk"
 
-    df['risk_zone'] = df['lda_probability'].apply(classify)
+    df['risk_zone'] = df['lda_probability'].apply(classify_zone)
 
-    # Show full results
+    # Display results
     st.write("### 🧾 Bankruptcy Risk Results")
     st.dataframe(df[['tic', 'fyear', 'lda_probability', 'risk_zone']])
 
@@ -62,20 +60,26 @@ if uploaded_file:
         mime='text/csv'
     )
 
-    # Company-specific risk trend
+    # Risk trend for specific company
     st.write("### 📊 View Risk Trend for a Specific Company")
     selected_tic = st.selectbox("Choose a company (ticker)", sorted(df['tic'].unique()))
-    company_df = df[df['tic'] == selected_tic]
+    company_df = df[df['tic'] == selected_tic].copy()
 
     st.write(f"#### Risk Data for {selected_tic}")
     st.dataframe(company_df[['fyear', 'lda_probability', 'risk_zone']])
 
+    # Define risk level order for y-axis
+    risk_order = ["🔴 Very High Risk", "🟠 High Risk", "🟡 Medium Risk", "🟢 Very Low Risk"]
+    company_df['risk_zone'] = pd.Categorical(company_df['risk_zone'], categories=risk_order, ordered=True)
+
+    # Categorical line chart
     chart = alt.Chart(company_df).mark_line(point=True).encode(
-        x='fyear:O',
-        y='lda_probability:Q',
+        x=alt.X('fyear:O', title='Fiscal Year'),
+        y=alt.Y('risk_zone:N', sort=risk_order, title='Risk Level'),
+        color=alt.Color('risk_zone:N', scale=alt.Scale(scheme='redyellowgreen')),
         tooltip=['fyear', 'lda_probability', 'risk_zone']
     ).properties(
-        title=f"📉 Bankruptcy Risk Trend for {selected_tic}"
+        title=f"📉 Risk Category Trend for {selected_tic}"
     )
 
     st.altair_chart(chart, use_container_width=True)
