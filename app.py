@@ -1,23 +1,24 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import altair as alt
+import matplotlib.pyplot as plt
 
 # Load model and scaler
 model = joblib.load('lda_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
 st.title("🧠 Bankruptcy Risk Predictor")
+st.markdown("Upload your dataset and visualize the bankruptcy probability over time for each company.")
 
 uploaded_file = st.file_uploader("📄 Upload a CSV file", type=['csv'])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
-    st.write("### 📋 Input Data Preview")
+    st.write("### 🧾 Input Data Preview")
     st.dataframe(df.head())
 
-    # Explain ratios
+    # Explain features
     with st.expander("ℹ️ What do the variables X1 to X5 mean?"):
         st.markdown("""
         - **X1**: Working Capital / Total Assets  
@@ -27,13 +28,13 @@ if uploaded_file:
         - **X5**: Sales / Total Assets
         """)
 
-    # Predict probability
-    X = df[['X1', 'X2', 'X3', 'X4', 'X5']]
-    X_scaled = scaler.transform(X)
-    df['lda_probability'] = model.predict_proba(X_scaled)[:, 1]
+    # Predict bankruptcy probabilities
+    features = df[['X1', 'X2', 'X3', 'X4', 'X5']]
+    features_scaled = scaler.transform(features)
+    df['lda_probability'] = model.predict_proba(features_scaled)[:, 1]
 
     # Risk classification
-    def classify(prob):
+    def get_risk(prob):
         if prob < 0.49:
             return "🔴 Very High Risk"
         elif prob < 0.50:
@@ -43,58 +44,44 @@ if uploaded_file:
         else:
             return "🟢 Very Low Risk"
 
-    df['risk_zone'] = df['lda_probability'].apply(classify)
+    df['risk_zone'] = df['lda_probability'].apply(get_risk)
 
-    # -----------------------------
-    # 📊 Filter & Trend Section
-    st.markdown("### 🔎 Filter & Visualize Bankruptcy Risk")
+    # Show results table
+    st.write("### 📊 Bankruptcy Risk Results")
+    st.dataframe(df[['tic', 'fyear', 'industry', 'lda_probability', 'risk_zone']])
 
-    # Dropdowns
-    selected_industry = st.selectbox("Choose an Industry", sorted(df['industry'].dropna().unique()))
-    filtered_by_industry = df[df['industry'] == selected_industry]
+    # Save download
+    csv = df.to_csv(index=False)
+    st.download_button("📥 Download Risk Predictions", csv, "bankruptcy_results.csv", "text/csv")
 
-    selected_tic = st.selectbox("Choose a Company (Ticker)", sorted(filtered_by_industry['tic'].unique()))
-    company_df = filtered_by_industry[filtered_by_industry['tic'] == selected_tic].copy()
+    # ------------------- INTERACTIVE FILTERS + LINE CHART -------------------
+    st.write("## 📈 Visualize Bankruptcy Trend")
 
-    st.write(f"#### Company: `{selected_tic}` | Industry: `{selected_industry}`")
+    # Dropdown filters
+    industry_options = sorted(df['industry'].dropna().unique())
+    selected_industry = st.selectbox("Filter by Industry", industry_options)
+
+    tic_options = sorted(df[df['industry'] == selected_industry]['tic'].unique())
+    selected_tic = st.selectbox("Choose Company (Ticker)", tic_options)
+
+    # Filter for selected company
+    company_df = df[(df['tic'] == selected_tic)].sort_values('fyear')
+
+    st.write(f"### Risk Data for `{selected_tic}`")
     st.dataframe(company_df[['fyear', 'lda_probability', 'risk_zone']])
 
-    # Altair chart with thresholds
-    thresholds = {
-        "🔴 Very High Risk": (0.0, 0.49),
-        "🟠 High Risk": (0.49, 0.50),
-        "🟡 Medium Risk": (0.50, 0.51),
-        "🟢 Very Low Risk": (0.51, 1.0),
-    }
+    # Plot using Matplotlib (to match your original chart)
+    fig, ax = plt.subplots(figsize=(10, 4))
 
-    # Bands
-    bands = []
-    for label, (low, high) in thresholds.items():
-        bands.append(
-            alt.Chart(pd.DataFrame({
-                'y': [low], 'y2': [high], 'risk': [label]
-            })).mark_rect(opacity=0.2).encode(
-                y='y:Q',
-                y2='y2:Q',
-                color=alt.Color('risk:N', scale=alt.Scale(
-                    domain=list(thresholds.keys()),
-                    range=['red', 'orange', 'gold', 'green']
-                ))
-            )
-        )
+    ax.plot(company_df['fyear'], company_df['lda_probability'], marker='o', linestyle='-')
+    ax.set_xlabel("Financial Year")
+    ax.set_ylabel("Probability of Bankruptcy")
+    ax.set_title(f"📉 Risk Evolution for {selected_tic} (Unseen Company)")
 
-    line = alt.Chart(company_df).mark_line(point=True).encode(
-        x=alt.X('fyear:O', title='Fiscal Year'),
-        y=alt.Y('lda_probability:Q', title='Probability of Bankruptcy'),
-        tooltip=['fyear', 'lda_probability', 'risk_zone']
-    )
+    # Add thresholds
+    ax.axhline(0.49, color='red', linestyle='--', label='Very High Risk Threshold')
+    ax.axhline(0.50, color='orange', linestyle='--', label='High Risk Threshold')
+    ax.axhline(0.51, color='green', linestyle='--', label='Very Low Risk Threshold')
 
-    final_chart = alt.layer(*bands, line).properties(
-        title=f"📈 Risk Evolution for {selected_tic} (Unseen Company)"
-    ).configure_title(fontSize=16)
-
-    st.altair_chart(final_chart, use_container_width=True)
-
-    # Download button
-    csv = df.to_csv(index=False)
-    st.download_button("📥 Download Full Predictions", data=csv, file_name='bankruptcy_risk_results.csv')
+    ax.legend()
+    st.pyplot(fig)
