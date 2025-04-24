@@ -42,7 +42,7 @@ total_assets = st.number_input("Total Assets", value=1.0)  # to avoid div by zer
 shareholders_equity = st.number_input("Shareholders' Equity", value=0.0)
 ebit = st.number_input("Earnings Before Interest & Tax (EBIT)", value=0.0)
 total_sales = st.number_input("Total Sales", value=0.0)
-long_term_debt = st.number_input("Long Term Debt", value=1.0)
+total_liabilities = st.number_input("Total Liabilities", value=1.0)
 stock_price = st.number_input("Stock Price", value=0.0)
 shares_outstanding = st.number_input("Shares Outstanding", value=0.0)
 
@@ -63,7 +63,7 @@ if st.button("🔍 Predict Bankruptcy Risk"):
     x1 = (assets_current_total - liabilities_current_total) / total_assets
     x2 = shareholders_equity / total_assets
     x3 = ebit / total_assets
-    x4 = (stock_price * shares_outstanding) / long_term_debt
+    x4 = (stock_price * shares_outstanding) / total_liabilities
     x5 = total_sales / total_assets
 
     # 2. Z-Score (LDA style)
@@ -89,7 +89,7 @@ if st.button("🔍 Predict Bankruptcy Risk"):
         "X1 (Working Capital / Total Assets)": round(x1, 4),
         "X2 (Retained Earnings / Total Assets)": round(x2, 4),
         "X3 (EBIT / Total Assets)": round(x3, 4),
-        "X4 (MVE / Total Liabilities)": round(x4, 4),
+        "X4 (Market Value of Equity / Total Liabilities)": round(x4, 4),
         "X5 (Sales / Total Assets)": round(x5, 4),
     })
 
