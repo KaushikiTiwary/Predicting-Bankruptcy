@@ -1,81 +1,27 @@
-import streamlit as st
-import pandas as pd
-import joblib
-import altair as alt
+# Filter: Industry → Ticker → Year (optional)
+st.write("### 🔍 Filter & Visualize Bankruptcy Risk")
 
-# Load model and scaler
-model = joblib.load('lda_model.pkl')
-scaler = joblib.load('scaler.pkl')
+selected_industry = st.selectbox("Select Industry", sorted(df['industry'].unique()))
 
-st.title("🧠 Bankruptcy Risk Predictor")
+filtered_df = df[df['industry'] == selected_industry]
 
-uploaded_file = st.file_uploader("📄 Upload a CSV file", type=['csv'])
+selected_tic = st.selectbox("Select Company (Ticker)", sorted(filtered_df['tic'].unique()))
+company_df = filtered_df[filtered_df['tic'] == selected_tic]
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+years = sorted(company_df['fyear'].unique())
+selected_year_range = st.slider("Select Year Range", min_value=min(years), max_value=max(years), value=(min(years), max(years)))
 
-    st.write("### Input Data Preview", df.head())
+company_df = company_df[(company_df['fyear'] >= selected_year_range[0]) & (company_df['fyear'] <= selected_year_range[1])]
 
-    # Show variable descriptions
-    with st.expander("ℹ️ What do the variables X1 to X5 mean?"):
-        st.markdown("""
-        - *X1*: Working Capital / Total Assets  
-        - *X2*: Retained Earnings / Total Assets  
-        - *X3*: EBIT / Total Assets  
-        - *X4*: Market Value of Equity / Total Liabilities  
-        - *X5*: Sales / Total Assets
-        """)
+st.write(f"### 🏢 Company: `{selected_tic}` | 🏭 Industry: `{selected_industry}`")
+st.dataframe(company_df[['fyear', 'lda_probability', 'risk_zone']])
 
-    # Extract only the X1 to X5 columns
-    X = df[['X1', 'X2', 'X3', 'X4', 'X5']]
-    X_scaled = scaler.transform(X)
+chart = alt.Chart(company_df).mark_line(point=True).encode(
+    x=alt.X('fyear:O', title="Financial Year"),
+    y=alt.Y('lda_probability:Q', title="Probability of Bankruptcy"),
+    tooltip=['fyear', 'lda_probability', 'risk_zone']
+).properties(
+    title=f"📉 Bankruptcy Trend for {selected_tic}"
+)
 
-    # Predict
-    probs = model.predict_proba(X_scaled)[:, 1]
-    df['lda_probability'] = probs
-
-    # Risk classification thresholds
-    q25, q50, q75 = 0.49, 0.50, 0.51
-
-    def classify(prob):
-        if prob < q25:
-            return "🔴 Very High Risk"
-        elif prob < q50:
-            return "🟧 High Risk"
-        elif prob < q75:
-            return "🟨 Medium Risk"
-        else:
-            return "🟩 Very Low Risk"
-
-    df['risk_zone'] = df['lda_probability'].apply(classify)
-
-    # Show full results
-    st.write("### 🧾 Bankruptcy Risk Results")
-    st.dataframe(df[['tic', 'fyear', 'lda_probability', 'risk_zone']])
-
-    # Download button
-    csv = df.to_csv(index=False)
-    st.download_button(
-        label="📥 Download Results as CSV",
-        data=csv,
-        file_name='bankruptcy_risk_results.csv',
-        mime='text/csv'
-    )
-
-    # Company-specific risk trend
-    st.write("### 📊 View Risk Trend for a Specific Company")
-    selected_tic = st.selectbox("Choose a company (ticker)", sorted(df['tic'].unique()))
-    company_df = df[df['tic'] == selected_tic]
-
-    st.write(f"#### Risk Data for {selected_tic}")
-    st.dataframe(company_df[['fyear', 'lda_probability', 'risk_zone']])
-
-    chart = alt.Chart(company_df).mark_line(point=True).encode(
-        x='fyear:O',
-        y='lda_probability:Q',
-        tooltip=['fyear', 'lda_probability', 'risk_zone']
-    ).properties(
-        title=f"📉 Bankruptcy Risk Trend for {selected_tic}"
-    )
-
-    st.altair_chart(chart, use_container_width=True)
+st.altair_chart(chart, use_container_width=True)
