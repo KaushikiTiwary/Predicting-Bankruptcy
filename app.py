@@ -51,7 +51,7 @@ st.subheader("💰 Enter Financial Inputs")
 assets_current_total = st.number_input("Assets Current Total", value=0.0)
 liabilities_current_total = st.number_input("Liabilities Current Total", value=0.0)
 total_assets = st.number_input("Total Assets", value=1.0)
-shareholders_equity = st.number_input("Shareholders' Equity", value=0.0)
+retained_earnings = st.number_input("Retained Earnings", value=0.0)
 ebit = st.number_input("EBIT (Earnings Before Interest & Tax)", value=0.0)
 total_sales = st.number_input("Total Sales", value=0.0)
 total_liabilities = st.number_input("Total Liabilities", value=1.0)
@@ -72,7 +72,7 @@ def get_risk(prob):
 # Predict button
 if st.button("🔍 Predict Bankruptcy Risk"):
     x1 = (assets_current_total - liabilities_current_total) / total_assets
-    x2 = shareholders_equity / total_assets
+    x2 = retained_earnings / total_assets
     x3 = ebit / total_assets
     x4 = (stock_price * shares_outstanding) / total_liabilities
     x5 = total_sales / total_assets
